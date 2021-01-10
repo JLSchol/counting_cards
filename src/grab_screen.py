@@ -13,7 +13,7 @@ from pywinauto import Desktop
 
 class GrabScreen(object):
 	def __init__(self):
-		self.title = "screen_capture"
+		self.TITLE = "screen_capture"
 
 		user32 = ctypes.windll.user32
 		screensize1 = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
@@ -41,14 +41,14 @@ class GrabScreen(object):
 			img = np.asarray(sct.grab(self.mon))
 
 			# display picture using opencv
-			cv2.imshow(self.title, img)
+			cv2.imshow(self.TITLE, img)
 
 			# wacht 10 ms if keyboard 'q' quit window
 			# else if 'X' pressed on window quit window
 			if (cv2.waitKey(10) & 0xFF == ord("q")):
 				cv2.destroyAllWindows()
 				break
-			elif (cv2.getWindowProperty(self.title, 0) == -1):
+			elif (cv2.getWindowProperty(self.TITLE, 0) == -1):
 				cv2.destroyAllWindows()
 				break
 
@@ -60,8 +60,9 @@ class GrabScreen(object):
 	def grabImage(self, image_file_name, show=True, method=cv2.IMREAD_UNCHANGED):
 		# get path to files
 		root_dir = Path(__file__).parent.parent
-		sub_dir = 'docs'
-		image_path = os.path.join(root_dir, sub_dir, image_file_name)
+		SUB_DIR = 'docs'
+		image_path = os.path.join(root_dir, SUB_DIR, image_file_name)
+		print(image_path)
 		img = cv2.imread(image_path, method)
 		if show:
 			cv2.imshow('detected', img)
@@ -84,7 +85,7 @@ def main():
 	GS.recordScreen()
 
 	# Grab image from docs folder
-	img = GS.grabImage('bj_screenshot.jpg',True)
+	img = GS.grabImage('bj_table.jpg',True)
 
 
 
