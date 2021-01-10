@@ -1,6 +1,7 @@
 # Readme file
 
 Counting cards for blackjack
+clubs hearts spades diamonds
 
 ### content
 This workspace contains:
