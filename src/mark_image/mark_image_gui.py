@@ -5,9 +5,12 @@ from tkinter import filedialog, ttk, messagebox
 
 from PIL import Image, ImageTk
 from pathlib import Path
+from functools import partial
 import os
 import cv2
 import numpy as np
+import json
+import ast
 
  
 
@@ -44,11 +47,14 @@ class GetPixelsFromImage():
             cv2.putText(self.img, "%d,%d" % (x, y), (x, y), cv2.FONT_HERSHEY_PLAIN,
                         1.0, (140, 15, 10), thickness=1)
 
-
         if event == cv2.EVENT_RBUTTONDOWN:
-            self.img = self.cach_imgs[-1].copy()
-            self.cach_imgs.pop()
-            self.pixel_list.pop()
+            if self.cach_imgs and self.pixel_list:
+                self.img = self.cach_imgs[-1].copy()
+                self.cach_imgs.pop()
+                self.pixel_list.pop()
+            else:
+                pass
+                
             # cv2.imshow(self.file_name, self.img)q
 
     def openImage(self):
@@ -84,23 +90,37 @@ class MarkImagesGui(tk.Frame):
 
         7. button: open file explorer to find save croped images
         8. combobox: display image path or enter manually
-        9. button: save info to file?  
+        9. button: save info to json file  
 
         7. button: Next image in list
         8. button: previous image in list
+
+        Current issues:
+        when image is open, the gui can not be filled in
+        When the image is open, it doen not allow enlarging the image
     '''
     def __init__(self, master=None):
         super().__init__(master)
         self.master = master
 
-        # variables
-        self.corner_coordinates = tk.StringVar()
-        self.image_path = tk.StringVar(value="C:/Users/Jasper/Desktop/counting_cards/data/backgrounds/bj_green_dark.jpg")
-        self.files_in_dir = []# ["C:/Users/Jasper/Desktop/counting_cards/data/backgrounds/bj_green_dark.jpg"]
+        root_dir = Path(__file__).parent.parent.parent
+        SUB_DIR = 'data'
+        SUB_DIR2 = 'raw_data'
+        START_FILE = 'clutterd1.jpg'
+        INITIAL_IMAGE = os.path.join(root_dir, SUB_DIR, SUB_DIR2, START_FILE)
 
-        self.save_dir = tk.StringVar(value="C:/Users/Jasper/Desktop/counting_cards/data/backgrounds")
-        self.save_dir_options = self._listFoldersInDir("C:/Users/Jasper/Desktop/counting_cards/data")
-        self.save_file_name = tk.StringVar(value='not yet generated')
+        # variable with initial image path and directory list
+        self.corner_coordinates = tk.IntVar()
+        self.image_path = tk.StringVar(value=INITIAL_IMAGE)
+        self.files_in_dir = self._listFilePathsInDir(Path(self.image_path.get()).parent)
+
+        self.save_dir = tk.StringVar(value=Path(self.image_path.get()).parent)
+        self.save_dir_options = self._listFoldersInDir(self.save_dir.get())
+
+
+        self.save_file_name = tk.StringVar(value=self._getJsonFileName(self.image_path.get()))
+        print(self.save_file_name.get())
+
         # self.new
 
         # self.coordinates = 
@@ -149,11 +169,11 @@ class MarkImagesGui(tk.Frame):
         card_label.place(relx=col3, rely=row2, relwidth=bw, relheight=bh)
         self.label_text = tk.Text(self.master, bg='white', yscrollcommand=True)
         self.label_text.place(relx=col3, rely=row2+bh, relwidth=bw, relheight=row3- row2-2*bh)
-        # positions entry and label
-        coordinate_text = tk.Label(self.master, text="table position")
-        coordinate_text.place(relx=col4, rely=row2, relwidth=bw, relheight=bh)
-        self.label_text = tk.Text(self.master, bg='white', yscrollcommand=True)
-        self.label_text.place(relx=col4, rely=row2+bh, relwidth=bw, relheight=row3- row2-2*bh)
+        # positions of card on table entry and label
+        table_pos_label = tk.Label(self.master, text="table position")
+        table_pos_label.place(relx=col4, rely=row2, relwidth=bw, relheight=bh)
+        self.table_pos_text = tk.Text(self.master, bg='white', yscrollcommand=True)
+        self.table_pos_text.place(relx=col4, rely=row2+bh, relwidth=bw, relheight=row3- row2-2*bh)
 
         ######## ROW 3 ########
         # open file manager
@@ -168,8 +188,16 @@ class MarkImagesGui(tk.Frame):
         self.save_file_name.trace('w', self._saveFileNameCB)
         entry_file_name.place(relx=col3+bw/2, rely=row3, relwidth=bw, relheight=bh)
         # save button
-        save_file_but = tk.Button(self.master, text="Save cards", command=self.saveFiles)
+        save_file_but = tk.Button(self.master, text="save file", command=self.saveFile)
         save_file_but.place(relx=col4, rely=row3, relwidth=bw, relheight=bh)
+
+        ######## ROW 4 ########
+        # previous image
+        previous_image_but = tk.Button(self.master, text="previous image", command=partial(self.newImageCB, arg='previous_image') )
+        previous_image_but.place(relx=col1, rely=row4, relwidth=bw, relheight=bh)
+        # next image
+        next_image_but = tk.Button(self.master, text="next image", command=partial(self.newImageCB, arg='next_image'))
+        next_image_but.place(relx=col4, rely=row4, relwidth=bw, relheight=bh)
 
 
     def setImagePath(self):
@@ -177,10 +205,6 @@ class MarkImagesGui(tk.Frame):
             initialdir=Path(__file__).parent.parent.parent, title='Choose an image.'))
         # get list of file paths from same directory and update in self.files
         self.files_in_dir = self._listFilePathsInDir(Path(self.image_path.get()).parent)
-
-    def setSaveDirectory(self):
-        self.save_dir.set(askdirectory(parent=root, 
-            initialdir=Path(__file__).parent.parent.parent, title='Choose save directory.'))
 
     def openImage(self):
         if not self.combo_file_path.get():
@@ -190,14 +214,15 @@ class MarkImagesGui(tk.Frame):
             messagebox.showerror("Error","Please select a correct file path")
             return 0
 
-        # update paths in combobox such that all other files show in dropdown menue
-        self.files_in_dir = self.updatePaths()
+        # update paths in combobox (dropdown menu), save file and save file directories
+        self.files_in_dir = self._listFilePathsInDir(Path(self.image_path.get()).parent)
+        # update save file.json 
+        self.save_file_name.set( self._getJsonFileName(self.image_path.get()) )
 
         # open the image using cv that allows drawing of points
         GPFI = GetPixelsFromImage(self.combo_file_path.get())
         GPFI.openImage()
-        print(GPFI.pixel_list)
-        # pathsOfAllFilesInDir(self.image_path)
+        # self.corner_coordinates = _getCornerCoordinates()
 
         # create coordinate string and insert in text window
         text = ""
@@ -206,14 +231,109 @@ class MarkImagesGui(tk.Frame):
                 text += '\n'
             pixel_str = "({},{}), ".format(x,y)
             text += pixel_str
+
         self.coordinate_text.insert(tk.INSERT,text) 
 
-    def _listFoldersInDir(self, top_dir):
-        return [Dir[0] for Dir in os.walk(top_dir)]
+    def setSaveDirectory(self):
+        self.save_dir.set(askdirectory(parent=root, 
+            initialdir=Path(__file__).parent.parent.parent, title='Choose save directory.'))
 
-    def saveFiles(self):
-        # Create function
-        print('save files')
+    def saveFile(self):
+        # read lines of text boxes
+        coordinates = self._read_coordinates(self.coordinate_text)
+        labels = self._read_text_input(self.label_text)
+        player_positions = self._read_text_input(self.table_pos_text)
+
+        # construct dictionair
+        dict_list = self._setDictionair(coordinates, labels, player_positions, self.image_path.get())
+        # save to file
+        self._writeToJsonFile( dict_list, os.path.join(self.save_dir.get(),self.save_file_name.get()) )
+
+        # clear text widgets
+        self._clearTextWidgets()
+
+    def _clearTextWidgets(self):
+        self.coordinate_text.delete('1.0',tk.END)
+        self.label_text.delete('1.0',tk.END)
+        self.table_pos_text.delete('1.0',tk.END)
+
+
+
+    def newImageCB(self, arg):
+        # update image_path
+        current_image_path = os.path.abspath(self.image_path.get())
+        # find next/previous position of current path index in directory
+        i = self.files_in_dir.index(current_image_path)
+        if arg=='next_image':
+            i+=1
+        elif arg=='previous_image':
+            i-+1
+        # set new image path
+        self.image_path.set(self.files_in_dir[i])
+        # open image
+        self.openImage()
+
+
+
+    def _read_text_input(self, text_widget):
+        text = text_widget.get('1.0', tk.END).splitlines()
+
+        return [line.replace(",", "") for line in text]
+
+
+        # return [line.split('.')[0] for line in text]
+        # return [line for line in text]
+
+    def _read_coordinates(self, text_widget):
+        text = text_widget.get('1.0', tk.END).splitlines()
+        coordinate_2Dlist = []
+        for text_line in text:
+            # convert to literal string of an list of tuples
+            list_of_tuples_txt = "["+text_line+"]"
+            list_of_tuples = ast.literal_eval(list_of_tuples_txt)
+            coordinate_2Dlist.append(list_of_tuples)
+        return coordinate_2Dlist
+
+    def _setDictionair(self, coordinate_cards, labels, player_positions, image_path):
+        for card_i_coordinates in coordinate_cards:
+            n_coordinates = len(card_i_coordinates)
+            card_corners = 4
+            assert n_coordinates%card_corners == 0
+
+        source_image_name = os.path.basename(image_path)
+        createName = lambda label, pos, name: label +'_'+str(pos)+'_'+name.split('.')[0]
+
+        info_cards = []
+        for cornerpoints, label, pos in zip(coordinate_cards, labels, player_positions):
+            info_card = {'source_image_path': image_path,
+                'source_image_name': source_image_name,
+                'card': label,
+                'left_top': cornerpoints[0],
+                'right_top': cornerpoints[1],
+                'left_bot': cornerpoints[2],
+                'right_bot': cornerpoints[3],
+                'card_position': pos,
+                'card_name': createName(label,pos,source_image_name)}
+            info_cards.append(info_card.copy())
+
+        return info_cards
+
+    def _writeToJsonFile(self, dict_list, file_path):
+        try: 
+            with open(file_path,'w') as out_file:
+                json.dump(dict_list, out_file)
+        except EnvironmentError:
+            print("WHOOPS!\nOp een of andere duistere reden can er niet naar: \n{} geschreven worden"
+                .format(file_path))
+
+    def _getJsonFileName(self,image_path):
+        image_file_name = os.path.basename(image_path)
+        file_name = image_file_name.split('.')[0]
+        json_file_name = file_name+'.json'
+        return json_file_name
+
+    def _listFoldersInDir(self, top_dir):
+        return [os.path.abspath(Dir[0]) for Dir in os.walk(top_dir)]
 
     def _listFilePathsInDir(self, dir_path):
         return [os.path.join(dir_path,file) for file in os.listdir(dir_path)]
@@ -228,68 +348,9 @@ class MarkImagesGui(tk.Frame):
         print(self.save_file_name.get())
 
 
-def setDictionair(pixel_list, labels, player_positions, image_path):
-    length = len(pixel_list)
-    card_corners = 4
-    assert length%card_corners == 0
-
-    n = 0
-    coordinate_cards = [] # 2D list (x cards, 4 pixel tuples)
-    # slice list after 4 pixels
-    for i, pixel in enumerate(pixel_list,1):
-        if i%card_corners == 0: # i is multiple of 4 
-            coordinate_cards.append(pixel_list[n:i]) # slice list and create 2D list
-            n+=card_corners
-
-    source_image_name = os.path.basename(image_path)
-    createName = lambda label, pos, name: label +'_'+str(pos)+'_'+name.split('.')[0]
-
-    info_cards = []
-    for cornerpoints, label, pos in zip(coordinate_cards, labels, player_positions):
-        info_card = {'source_image_path': image_path,
-            'source_image_name': source_image_name,
-            'card': label,
-            'left_top': cornerpoints[0],
-            'right_top': cornerpoints[1],
-            'left_bot': cornerpoints[2],
-            'right_bot': cornerpoints[3],
-            'card_position': pos,
-            'new_name': createName(label,pos,source_image_name)}
-        info_cards.append(info_card.copy())
-
-    print(info_cards)
-
-
-
 
 if __name__ == "__main__":
-
-    # # setDictionair Function
-    # pixel_list = [(1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(1,8)]
-    # labels = ['As','7c']
-    # image_path = 'image_path/ik.jpg'
-    # player_positions = [1, 6]
-    # setDictionair(pixel_list, labels, player_positions, image_path)
 
     root = tk.Tk()
     GUI = MarkImagesGui(master=root)
     GUI.mainloop()
-
-    # launch app
-        # select folder + image
-        # open image
-            # clickclcik
-            # close image
-        # Fill in card labels
-        # save pixels, card label
-            # store in dict with info
-        # open next image
-
-
-
-    # GPFI = GetPixelsFromImage()
-    # GPFI.GetPixelsFromImage()
-
-    # print(GPFI.pixel_list)
-
-
