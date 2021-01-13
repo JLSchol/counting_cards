@@ -43,5 +43,14 @@ for each card randomize:
 - illumination
 
 
-### option 1
-- 
+### How to represent cards
+- single cards 53 (for x card and 3 casino backgrounds?)
+	- 8 table positions
+	- 6 rotations (Somewhere on the table)
+	- 4 blocked corners (random orientation, position, warped at the table)
+	- 4 blocked sides (random orientation, position, warped at the table)
+
+- corner overlap (4 cards)
+- top overlap (4 cards)
+- side overlap (4 cards)
+
