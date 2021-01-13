@@ -3,6 +3,13 @@ Keep it simple
 Train specific on Unibet blackjack table
 just train on 
 
+Explanation convolutional neural networks:
+- what is a neural network
+- (input,convolutional, pooling, flatting) layers
+- hyper parameters
+- Activation functions
+https://poloclub.github.io/cnn-explainer/
+
 ## Considerations
 - detect whole card vs corners/sides
 - detect only value vs type and value
