@@ -53,7 +53,7 @@ class ReadAndCheckData():
 			return False
 
 	def _isValidCardPosition(self, card_position):
-		card_positions = ['dealer','1','2','3','4','5','6','7']
+		card_positions = [0,'1','2','3','4','5','6','7']
 		if card_position in card_positions:
 			return True
 		else:
@@ -71,31 +71,52 @@ class ReadAndCheckData():
 
 
 class ExtractCards():
-	def __init__(img_dir_path, info_dir_path):
-		self.img_dir_path = image_path
-		self.info_dir_path = info_folder_path
+	def __init__(self, info_dir_path=None, img_dir_path=None):
+		self.img_dir_path = img_dir_path
+		self.info_dir_path = info_dir_path
 		self.croped_cards = []
 		self.warped_cards = []
-		self.Trans_card_2_ref = []
-		self.Trans_ref_2_card = []
+		self.card_2_zero_T = []
+		self.zero_2_card_T = []
 
-	# def 
+	def crop(self, img, contours):
+		pass
+
+	def warpCardToZeroAndCrop(self, card_points, w_card, h_card ):
+		zero_position = np.float32( [[0,0], [w_card,0], [0,h_card], (w_card, h_card)] )
+		warped_img, persp_T = self.warpToTarget(card_points, zero_position, w_card, h_card)
+
+		# redefine card_points by getting relative positions
+		# print(zero_position[:,0])
+		x_min,x_max = card_points[:,0].min(), card_points[:,0].max()
+		y_min,y_max = card_points[:,1].min(), card_points[:,1].max()
+
+		new_position = np.zeros((4,2),np.float32)
+		new_position[:,0] = card_points[:,0] - x_min
+		new_position[:,1] = card_points[:,1] - y_min
+		inv_persp_T = cv2.getPerspectiveTransform(zero_position, new_position)
+		cropped_img = cv2.warpPerspective(warped_img, inv_persp_T, 
+			(x_max-x_min, y_max-y_min), dst=cv2.WARP_INVERSE_MAP, borderMode=cv2.BORDER_TRANSPARENT)
+
+		return warped_img, cropped_img, persp_T
+
+
+	def warpToTarget(self, card_points, target_points, w_card, h_card):
+		persp_T = cv2.getPerspectiveTransform(card_points, target_points)
+		warped_img = cv2.warpPerspective(img, persp_T, (w_card, h_card))
+		# cv2.imshow('warped card', warped_img)
+		return warped_img, persp_T
 
 if __name__ == "__main__":
 	# some handy folder and file names
 	root_dir = Path(__file__).parent.parent.parent
-	SUB_DIR = 'data'
-	SUB_DIR2 = 'raw_data'
-	IMAGE_NAME = 'clutterd1.jpg'
-	SUB_DIR3 = 'image_info'
-	INFO_NAME = 'clutterd1.json'
-
+	[SUB_DIR, SUB_DIR2, SUB_DIR3] = ['data', 'raw_data', 'image_info'] 
+	[IMAGE_NAME, INFO_NAME] = ['clutterd1.jpg', 'clutterd1.json']
 	# some handy folder and file paths
 	info_dir_path = os.path.join(root_dir, SUB_DIR, SUB_DIR2,SUB_DIR3)
-	info_file_path = os.path.join(root_dir, SUB_DIR, SUB_DIR2, SUB_DIR3, INFO_NAME)
+	# info_file_path = os.path.join(root_dir, SUB_DIR, SUB_DIR2, SUB_DIR3, INFO_NAME)
 	image_dir_path = os.path.join(root_dir, SUB_DIR, SUB_DIR2)
-	image_path = os.path.join(root_dir, SUB_DIR, SUB_DIR2, IMAGE_NAME)
-
+	# image_path = os.path.join(root_dir, SUB_DIR, SUB_DIR2, IMAGE_NAME)
 	# list files in a directory
 	listFilePathsInDir = lambda dir_path: [os.path.join(dir_path,file) for file in os.listdir(dir_path)]
 
@@ -103,64 +124,47 @@ if __name__ == "__main__":
 	RAC = ReadAndCheckData()
 	data = RAC.readAll(listFilePathsInDir(info_dir_path))
 	# RAC.checkData(data)
+	# print(data)
 
 	# read cards
+	
 
-	# crop cards
-		# find center
+	d0 = data[1]
+	print(d0)
+	# get image path
+	img_path = d0['source_image_path']
+	img = cv2.imread(img_path)
+	# cv2.imshow(d0['source_image_name'], img)
 
-	# warp cards
+	# warp image to zero position
+	EC = ExtractCards()	
+	(w_card, h_card) = (75, 100)
+	card_points = np.float32( [d0['left_top'], d0['right_top'], d0['left_bot'], d0['right_bot']] )
 
-	# filter enhance?
+	print(img.shape)
+	warped_img, croped_img, persp_trans = EC.warpCardToZeroAndCrop(card_points, w_card, h_card)
 
-	# 
-    
+	cv2.imshow('warped', warped_img)
+	cv2.imshow('croped', croped_img)
+	# cv2.imshow('warped', warped_img)
 
-# print(image_path)
+	# # compare crop and fore/backwarp
+	# # check if back ground can be set transparant
 
-# img = cv2.imread(image_path)
+	# # crop process
+	# [x1,y1] = d0['left_top']
+	# [x2,y2] = d0['right_top']
+	# [x3,y3] = d0['left_bot']
+	# [x4,y4] = d0['right_bot']
+	# widths = np.array([x1,x2,x3,x4])
+	# heigts = np.array([y1,y2,y3,y4])
+	# x_min, x_max = widths.min(),widths.max()
+	# y_min, y_max = heigts.min(),heigts.max()
+	# dx = x_max-x_min
+	# dy = y_max-y_min
+	# print('widths: {} x_min: {} x_max: {}'.format(widths, x_min, x_max))
+	# print('heigts: {} y_min: {} y_max: {}'.format(heigts, y_min, y_max))
+	# use copy such that the poython garbage collectory remoove the original image
+	# croped = img[y_min:y_max, x_min:x_max].copy() 
 
-# cv2.imshow('originan', img)
-
-# # define corner points
-# left_top = (559,741)
-# right_top = (596,763)
-# left_bot = (483,778)
-# right_bot = (521,801)
-# ref_points = np.float32( [left_top, right_top, left_bot, right_bot] ) 
-
-
-# l = 483
-# r = 596
-# t = 801
-# b = 741
-
-
-
-# # wh_s, wh_l = 0.640, 0.716
-
-
-
-# w,h = 75, 100
-# target_points = np.float32( [[0,0], [w,0], [0,h], [w,h]] )
-
-
-# perspective_T = cv2.getPerspectiveTransform(
-# 	ref_points, target_points)
-# warped_img = cv2.warpPerspective(img, perspective_T, (w,h))
-
-# print(perspective_T)
-
-
-
-# left_top = [559-l,741-b]
-# right_top = [596-l,763-b]
-# left_bot = [483-l,778-b]
-# right_bot = [521-l,801-b]
-# ref_points = np.float32( [left_top, right_top, left_bot, right_bot] ) 
-# in_map = cv2.getPerspectiveTransform(target_points, ref_points)
-# returned_img = cv2.warpPerspective(warped_img, in_map, (w+40,h-40), cv2.WARP_INVERSE_MAP)
-
-# cv2.imshow('warped card', warped_img)
-# cv2.imshow('returned card', returned_img)
-# cv2.waitKey(0)
+	cv2.waitKey(0)
